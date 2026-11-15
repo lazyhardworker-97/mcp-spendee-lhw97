@@ -18,7 +18,8 @@ from mcp_spendee.diagnostics import CallTrace, configure_logging, current_trace,
 mcp = FastMCP(
     "Spendee",
     instructions=(
-        "Read personal finance data from Spendee. Always preview create_transaction "
+        "Read personal finance data from Spendee. Preview move_transaction before passing its "
+        "preview_token. Always preview create_transaction "
         "before confirming it, and use a unique request_id for each intended write."
     ),
 )
@@ -53,6 +54,8 @@ async def _run_tool(function: Callable[..., Any], **kwargs: Any) -> Any:
                         "preview",
                         "created",
                         "existing",
+                        "moved",
+                        "already_moved",
                         "created_labels_failed",
                     }:
                         event(
@@ -193,6 +196,31 @@ async def create_transaction(
         allow_duplicate=allow_duplicate,
         confirm=confirm,
         request_id=request_id,
+    )
+
+
+@mcp.tool()
+async def move_transaction(
+    source_wallet_id: ResourceId,
+    target_wallet_id: ResourceId,
+    transaction_id: str,
+    preview_token: str | None = None,
+) -> dict[str, Any]:
+    """Preview or move one existing regular transaction between manual wallets.
+
+    Wallet currencies must match. Use IDs from list_wallets and list_transactions.
+    First omit preview_token. Check the source, destination and expense details
+    in the preview, then pass its preview_token with the same IDs to commit.
+    The move preserves the ID, category, dates, original exchange rate and
+    labels. Retry an uncertain result with the same IDs and preview_token.
+    This tool does not create a transfer or convert currency.
+    """
+    return await _run_tool(
+        _gateway.move_transaction,
+        source_wallet_id=source_wallet_id,
+        target_wallet_id=target_wallet_id,
+        transaction_id=transaction_id,
+        preview_token=preview_token,
     )
 
 

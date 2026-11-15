@@ -17,6 +17,7 @@ from spendee.firestore import _decode_document
 
 from mcp_spendee.config import Settings
 from mcp_spendee.diagnostics import check_cancelled, event, resource_tag, span
+from mcp_spendee.move import move_firestore_transaction
 
 TransactionType = Literal["expense", "income"]
 ResourceId = int | str
@@ -98,6 +99,17 @@ class _ConfiguredSpendee(Spendee):
                     has_next=bool(payload.get("nextPageToken")),
                 )
         return response
+
+    def move_firestore_transaction(
+        self,
+        source_wallet_id: ResourceId,
+        target_wallet_id: ResourceId,
+        transaction_id: str,
+        preview_token: str | None,
+    ) -> dict[str, Any]:
+        return move_firestore_transaction(
+            self, source_wallet_id, target_wallet_id, transaction_id, preview_token
+        )
 
     def _query_transactions(
         self,
@@ -504,6 +516,22 @@ class SpendeeGateway:
             "firestore_wallet_id",
         )
         return [_pick(transaction, fields) for transaction in transactions]
+
+    def move_transaction(
+        self,
+        *,
+        source_wallet_id: ResourceId,
+        target_wallet_id: ResourceId,
+        transaction_id: str,
+        preview_token: str | None = None,
+    ) -> dict[str, Any]:
+        return self._call(
+            "move_firestore_transaction",
+            source_wallet_id,
+            target_wallet_id,
+            transaction_id,
+            preview_token,
+        )
 
     def create_transaction(
         self,
