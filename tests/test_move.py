@@ -57,6 +57,10 @@ class FakeFirestore:
             },
         )
 
+        self.docs[self.source + self.label]["fields"]["createdAt"] = {
+            "timestampValue": "2026-11-09T10:00:00Z"
+        }
+
     def add(self, path, data):
         self.docs[path] = {
             "name": f"{self._firestore_documents_name}/{path}",
@@ -92,7 +96,18 @@ class FakeFirestore:
                 else:
                     assert write["currentDocument"] == {"exists": False}
                     assert key not in self.docs
-                    self.docs[key] = {**write["update"], "updateTime": "2026-11-15T10:00:00Z"}
+                    fields = write["update"]["fields"]
+                    if "/transactionLabels/" in key:
+                        assert "createdAt" not in fields
+                        assert write["updateTransforms"] == [
+                            {"fieldPath": "createdAt", "setToServerValue": "REQUEST_TIME"}
+                        ]
+                        fields = {**fields, "createdAt": {"timestampValue": "2026-11-15T10:00:00Z"}}
+                    self.docs[key] = {
+                        **write["update"],
+                        "fields": fields,
+                        "updateTime": "2026-11-15T10:00:00Z",
+                    }
 
             result = {}
         return type("Response", (), {"json": lambda _: deepcopy(result)})()

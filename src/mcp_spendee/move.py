@@ -129,7 +129,7 @@ def _normalized(docs: list[dict[str, Any]]) -> list[tuple[str, dict[str, Any]]]:
             {
                 k: v
                 for k, v in doc["fields"].items()
-                if k != "path" and not (index == 0 and k == "updatedAt")
+                if k not in {"path", "updatedAt" if index == 0 else "createdAt"}
             },
         )
         for index, doc in enumerate(docs)
@@ -150,11 +150,10 @@ def _writes(
             },
             "currentDocument": {"exists": False},
         }
-        if doc["name"] == source_name:
-            fields.pop("updatedAt", None)
-            write["updateTransforms"] = [
-                {"fieldPath": "updatedAt", "setToServerValue": "REQUEST_TIME"}
-            ]
+        # Firestore requires the server's creation time for a new label relation.
+        timestamp = "updatedAt" if doc["name"] == source_name else "createdAt"
+        fields.pop(timestamp, None)
+        write["updateTransforms"] = [{"fieldPath": timestamp, "setToServerValue": "REQUEST_TIME"}]
         writes.append(write)
     for doc in reversed(docs):
         writes.append({"delete": doc["name"], "currentDocument": {"updateTime": doc["updateTime"]}})
