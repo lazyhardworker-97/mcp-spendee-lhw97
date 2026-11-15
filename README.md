@@ -2,7 +2,8 @@
 
 An unofficial Model Context Protocol (MCP) server for
 [Spendee](https://www.spendee.com/). It lets MCP clients inspect wallets,
-categories, and transactions, and create income or expense transactions.
+categories, and transactions, create income or expense transactions, and move
+existing transactions between manual wallets.
 
 > [!WARNING]
 > Spendee does not publish a supported public API. This server uses a
@@ -20,6 +21,7 @@ categories, and transactions, and create income or expense transactions.
 - `create_transaction` — preview or create an expense/income transaction,
   optionally with existing modern labels and an amount in a currency different
   from the selected wallet.
+- `move_transaction` — preview or move one existing transaction to another wallet.
 
 Creating a transaction is deliberately two-step. Call `create_transaction` once
 with `confirm=false` to inspect the normalized payload, then repeat it with
@@ -51,6 +53,24 @@ ISO `currency`. The preview resolves Spendee's current exchange rate and shows
 both the wallet amount and the original amount. Repeat the confirmed call with
 the preview's `foreign_rate` in `exchange_rate`; this pins the exact conversion
 that was reviewed instead of silently fetching a newer rate.
+
+## Moving an existing transaction
+
+Use `source_wallet_id` and `target_wallet_id` from `list_wallets` and the
+`transaction_id` from `list_transactions`. Call `move_transaction` without
+`preview_token` first. Verify both wallet names and the transaction details,
+then call it with the same IDs and the returned token. After a timeout, retry
+with the same token. If the original is gone and the destination matches the
+preview, the retry returns `already_moved`.
+
+The wallets must be active manual wallets under the current user's account
+and have the same currency. Only regular transactions in the known Firestore
+schema are supported. The move preserves the transaction ID, amount, original
+currency and exchange rate, category, date, note and label relations. Firestore
+creates the destination and deletes the source in one atomic commit, with
+preconditions to prevent overwriting existing documents or deleting documents
+that changed after the read. The server verifies the result by reading both
+wallets.
 
 ## Transaction history and dates
 
@@ -174,7 +194,8 @@ make test
 - Credentials are read only from environment variables.
 - Status output never includes credentials.
 - Transaction amounts must be positive; `transaction_type` determines the sign.
-- Writes require both `confirm=true` and a non-empty `request_id`.
+- Creates require both `confirm=true` and a non-empty `request_id`. Moves require
+  the token from a matching preview.
 - The request cache handles immediate retries, and the Firestore content check
   prevents exact duplicates across request IDs and server restarts.
 
